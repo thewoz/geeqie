@@ -175,8 +175,6 @@ static gboolean file_data_check_changed_single_file(FileData *fd, struct stat *s
 	    fd->size != st->st_size ||
 	    fd->date != st->st_mtime ||
 	    fd->mtime_nsec != stat_mtime_nsec(*st) ||
-	    fd->cdate != st->st_ctime ||
-	    fd->ctime_nsec != stat_ctime_nsec(*st) ||
 	    fd->device != st->st_dev || fd->inode != st->st_ino)
 		{
 		fd->missing = st->st_mode == 0;
@@ -199,6 +197,19 @@ static gboolean file_data_check_changed_single_file(FileData *fd, struct stat *s
 		file_data_send_notification(fd, NOTIFY_REREAD);
 		return TRUE;
 		}
+
+	/*
+	 * A status change alone does not invalidate the contents: some file
+	 * systems, such as NFS shares, update ctime together with atime when a
+	 * file is read, which would make every load look like a modification.
+	 * Only refresh the attributes, so that the permissions and the status
+	 * change time stay current.
+	 */
+	if (fd->cdate != st->st_ctime || fd->ctime_nsec != stat_ctime_nsec(*st))
+		{
+		file_data_set_stat(fd, *st);
+		}
+
 	return FALSE;
 }
 

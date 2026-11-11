@@ -261,6 +261,35 @@ TEST_F(ThumbnailReplacement, ReplacementWithPreservedSizeAndMtimeInvalidatesCach
 	EXPECT_FALSE(file_data_check_changed_files(fd));
 }
 
+TEST_F(ThumbnailReplacement, StatusChangeRefreshesAttributesAndKeepsCachedState)
+{
+	seed_cache(nullptr);
+	auto fd = FileData::new_simple(path);
+	load(fd);
+	ASSERT_NE(fd->thumb_pixbuf, nullptr);
+	fd->exif_orientation = 6;
+	const gint version = fd->version;
+	gint rereads = 0;
+	const auto notify = [](FileData *, NotifyType type, gpointer data)
+		{
+		if (type & NOTIFY_REREAD) ++*static_cast<gint *>(data);
+		};
+	ASSERT_TRUE(file_data_register_notify_func(notify, &rereads, NOTIFY_PRIORITY_LOW));
+	// A permission change updates only the status change time.
+	fd->cdate = 0;
+	ASSERT_EQ(g_chmod(path, 0400), 0);
+	EXPECT_FALSE(file_data_check_changed_files(fd));
+	EXPECT_TRUE(file_data_unregister_notify_func(notify, &rereads));
+	EXPECT_EQ(rereads, 0);
+	EXPECT_EQ(fd->version, version);
+	EXPECT_EQ(fd->mode & 0777, 0400U);
+	EXPECT_NE(fd->cdate, 0);
+	EXPECT_NE(fd->thumb_pixbuf, nullptr);
+	EXPECT_EQ(fd->exif_orientation, 6);
+	EXPECT_TRUE(g_file_test(cache_path, G_FILE_TEST_EXISTS));
+	EXPECT_EQ(g_chmod(path, 0600), 0);
+}
+
 TEST_F(ThumbnailReplacement, MissingSourceKeepsItsCachedThumbnail)
 {
 	seed_cache(nullptr);
