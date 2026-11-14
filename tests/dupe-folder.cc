@@ -239,10 +239,6 @@ TEST_P(DuplicateFolders, SubfoldersAreSeparateFolders)
 	expect_cross_folder_results({first, second});
 }
 
-// Retained GtkTreeView APIs pending migration to GTK list models.
-#ifndef SHOW_ALL_DEPRECATED_WARNINGS
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-#endif
 TEST_P(DuplicateFolders, MixedGroupsRetainEveryCrossFolderPair)
 {
 	toggle(true);
@@ -260,22 +256,17 @@ TEST_P(DuplicateFolders, MixedGroupsRetainEveryCrossFolderPair)
 	else add({a, a2, a3, b, b2, b3});
 	expect_cross_folder_results({a, a2, a3, b, b2, b3});
 	ASSERT_TRUE(gtk_widget_activate_action(dw->window, "win.dupe-win-select-group2", nullptr));
-	auto *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(dw->listview));
-	GtkTreeModel *model = nullptr;
-	g_autolist(GtkTreePath) rows = gtk_tree_selection_get_selected_rows(selection, &model);
-	ASSERT_NE(rows, nullptr);
-	for (GList *row = rows; row; row = row->next)
+	auto *selection = gtk_column_view_get_model(GTK_COLUMN_VIEW(dw->listview));
+	g_autoptr(GtkBitset) selected = gtk_selection_model_get_selection(selection);
+	ASSERT_FALSE(gtk_bitset_is_empty(selected));
+	GtkBitsetIter iter;
+	guint position;
+	for (bool valid = gtk_bitset_iter_init_first(&iter, selected, &position); valid; valid = gtk_bitset_iter_next(&iter, &position))
 		{
-		GtkTreeIter iter;
-		ASSERT_TRUE(gtk_tree_model_get_iter(model, &iter, static_cast<GtkTreePath *>(row->data)));
-		DupeItem *item = nullptr;
-		gtk_tree_model_get(model, &iter, 0, &item, -1);
+		auto *item = dupe_listview_item_at(dw->listview, position);
 		EXPECT_EQ(g_list_find(dw->dupes, item), nullptr);
 		}
 }
-#ifndef SHOW_ALL_DEPRECATED_WARNINGS
-G_GNUC_END_IGNORE_DEPRECATIONS
-#endif
 
 TEST_P(DuplicateFolders, EqualKeysInOneFolderDoNotHideOtherCandidates)
 {
@@ -299,10 +290,6 @@ TEST_P(DuplicateFolders, EqualKeysInOneFolderDoNotHideOtherCandidates)
 		}
 }
 
-// Retained GtkTreeView APIs pending migration to GTK list models.
-#ifndef SHOW_ALL_DEPRECATED_WARNINGS
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-#endif
 TEST_P(DuplicateFolders, RemovingSharedMatchDoesNotCreateSameFolderMatches)
 {
 	toggle(true);
@@ -316,18 +303,15 @@ TEST_P(DuplicateFolders, RemovingSharedMatchDoesNotCreateSameFolderMatches)
 		}
 	else add({a, a2, b});
 	expect_cross_folder_results({a, a2, b});
-	auto *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(dw->listview));
-	gtk_tree_selection_unselect_all(selection);
-	auto *model = gtk_tree_view_get_model(GTK_TREE_VIEW(dw->listview));
-	GtkTreeIter iter;
+	auto *selection = gtk_column_view_get_model(GTK_COLUMN_VIEW(dw->listview));
+	gtk_selection_model_unselect_all(selection);
 	guint selected = 0;
-	for (gboolean valid = gtk_tree_model_get_iter_first(model, &iter); valid; valid = gtk_tree_model_iter_next(model, &iter))
+	for (guint i = 0; i < g_list_model_get_n_items(G_LIST_MODEL(selection)); ++i)
 		{
-		DupeItem *item = nullptr;
-		gtk_tree_model_get(model, &iter, 0, &item, -1);
+		auto *item = dupe_listview_item_at(dw->listview, i);
 		if (b == item->fd->path)
 			{
-			gtk_tree_selection_select_iter(selection, &iter);
+			gtk_selection_model_select_item(selection, i, FALSE);
 			++selected;
 			}
 		}
@@ -338,9 +322,6 @@ TEST_P(DuplicateFolders, RemovingSharedMatchDoesNotCreateSameFolderMatches)
 	EXPECT_EQ(g_list_length(dw->list) + g_list_length(dw->second_list), 2U);
 	for (const auto &path : paths) EXPECT_TRUE(g_file_test(path.c_str(), G_FILE_TEST_IS_REGULAR));
 }
-#ifndef SHOW_ALL_DEPRECATED_WARNINGS
-G_GNUC_END_IGNORE_DEPRECATIONS
-#endif
 
 TEST_P(DuplicateFolders, ClosingWindowCancelsDeferredComparison)
 {
